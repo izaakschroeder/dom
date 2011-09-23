@@ -1,0 +1,10 @@
+{
+	"name": "dom",
+	"description": "A simple implementation of the DOM.",
+	"author": "Izaak Schroeder",
+	"engine": "node >= 0.4.10",
+	"main": "dom.js",
+	"dependencies": {
+		"sax": "0.0.1"
+	}
+}
