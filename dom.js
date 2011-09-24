@@ -430,7 +430,7 @@ function DOM(done) {
 	}
 	
 	parser.oncomment = function(t) {
-		insert(new CommentNode(t));
+		insert(new Comment(t));
 	};
 	
 	parser.onprocessinginstruction = function(t) {
