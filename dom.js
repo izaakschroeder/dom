@@ -21,9 +21,9 @@ Node.prototype.getAttribute = function(attr) {
 
 Node.prototype.getElementsByAttribute = function(attr, value) {
 	var out = [];
-
+	
 	for(var i = 0; i<this.childNodes.length; ++i) {
-		var child = this.childNodes[i];
+		var child = this.childNodes[i];		
 		
 		if (child.attributes[attr] == value)
 			out.push(child);
@@ -145,11 +145,11 @@ Node.prototype.content = function(content) {
 	if (typeof content === "undefined") {
 		content = "";
 		for(var i = 0; i < this.childNodes.length; ++i) 
-			content += this.childNodes[i].generate();
+			content += this.childNodes[i].toString();
 		return content;
 	} else {
 		this.empty();
-		if (typeof content == "string")
+		if (!(content instanceof Node))
 			content = new Text(content);
 		this.appendChild(content);
 	}
@@ -170,10 +170,10 @@ function Element(e, attrs) {
 	Node.call(this);
 	
 	if (typeof e === "object") {
-		this.attributes = e.attributes || [ ];
+		this.attributes = e.attributes || { };
 		this.tagName = e.name || e.tagName;
 	} else {
-		this.attributes = attrs || [ ];
+		this.attributes = attrs || { };
 		this.tagName = e;
 	}
 	
@@ -184,10 +184,10 @@ function Element(e, attrs) {
 util.inherits(Element, Node);
 
 
-Element.prototype.generate = function() {
+Element.prototype.toString = function() {
 	var out = "", text = "";
 	for(var i = 0; i<this.childNodes.length; ++i)
-		text += this.childNodes[i].generate();
+		text += this.childNodes[i].toString();
 	out += "<"+this.tagName+"";
 	for(var attr in this.attributes)
 		out += " "+attr+'="'+this.attributes[attr]+'"';
@@ -198,16 +198,16 @@ Element.prototype.generate = function() {
 	return out;
 }
 
-Element.prototype.clone = function() {
-	var attrs = [ ];
+Element.prototype.cloneNode = function(deep) {
+	var attrs = { };
 	for (var i in this.attributes)
 		attrs[i] = this.attributes[i];
 	var e = new Element(this.tagName, attrs);
-	for(var i = 0; i < this.childNodes.length; ++i) {
-		if (typeof this.childNodes[i].clone === "undefined")
-			console.log(this.childNodes[i]);
-		e.appendChild(this.childNodes[i].clone());
-	}
+	if (deep)
+		for(var i = 0; i < this.childNodes.length; ++i)
+			e.appendChild(this.childNodes[i].cloneNode(deep));
+
+	
 	return e;
 }
 
@@ -230,11 +230,11 @@ util.inherits(Text, Node);
 Text.prototype.nodeType = 3;
 Text.prototype.nodeName = "#text"
 
-Text.prototype.generate = function() {
+Text.prototype.toString = function() {
 	return this.nodeValue;
 }
 
-Text.prototype.clone = function() {
+Text.prototype.cloneNode = function() {
 	return new Text(this.nodeValue);
 }
 
@@ -256,11 +256,11 @@ function CDATASection(cdata) {
 
 util.inherits(CDATASection, Node);
 
-CDATASection.prototype.generate = function() {
+CDATASection.prototype.toString = function() {
 	return "<![CDATA["+node.nodeValue+"]]";
 }
 
-CDATASection.prototype.clone = function() {
+CDATASection.prototype.cloneNode = function() {
 	return new CDATASection(this.nodeValue);
 }
 
@@ -282,11 +282,11 @@ function ProcessingInstruction(name, body) {
 
 util.inherits(ProcessingInstruction, Node);
 
-ProcessingInstruction.prototype.generate = function() {
+ProcessingInstruction.prototype.toString = function() {
 	return "<?"+this.nodeName+" "+this.nodeValue+"?>";
 }
 
-ProcessingInstruction.prototype.clone = function() {
+ProcessingInstruction.prototype.cloneNode = function() {
 	return new ProcessingInstruction(this.nodeName, this.nodeValue);
 }
 
@@ -306,11 +306,11 @@ function Comment(comment) {
 
 util.inherits(Comment, Node);
 
-Comment.prototype.generate = function() {
+Comment.prototype.toString = function() {
 	return "<!--"+this.nodeValue+"-->";
 }
 
-Comment.prototype.clone = function() {
+Comment.prototype.cloneNode = function() {
 	return new Comment(this.nodeValue);
 }
 
@@ -339,18 +339,19 @@ Document.prototype.getDocumentElement = function() {
 	return null;				
 }
 
-Document.prototype.generate = function() {
+Document.prototype.toString = function() {
 	var out = "";
 	for(var i = 0; i<this.childNodes.length; ++i)
-		out += this.childNodes[i].generate();
+		out += this.childNodes[i].toString();
 	return out;
 }
 
-Document.prototype.clone = function() {
+Document.prototype.cloneNode = function(deep) {
 	var doc = new Document();
 	
-	for (var i = 0; i < this.childNodes.length; ++i) 
-		doc.appendChild(this.childNodes[i].clone())
+	if (deep)
+		for (var i = 0; i < this.childNodes.length; ++i) 
+			doc.appendChild(this.childNodes[i].cloneNode(deep))
 	
 		
 	return doc;
@@ -372,11 +373,11 @@ function DocumentType(type) {
 
 util.inherits(DocumentType, Node);
 
-DocumentType.prototype.generate = function() {
+DocumentType.prototype.toString = function() {
 	return "<!DOCTYPE "+this.nodeValue+">";
 }
 
-DocumentType.prototype.clone = function() {
+DocumentType.prototype.cloneNode = function() {
 	return new DocumentType(this.nodeValue);
 }
 
@@ -406,7 +407,7 @@ function DOM(done) {
 	var elementStack = [document];
 	
 	parser.onerror = function (e) {
-	  // an error happened.
+		throw "XML error: "+e;
 	};
 	
 	parser.ontext = function (t) {
