@@ -1,10 +1,26 @@
 (function(dom) {
 
+global.sizzleCapabilities = {
+	contains: true,
+	compareDocumentPosition: false,
+	nodeListToArray: true,
+	querySelectorAll: false,
+	getElementsByClassName: false,
+	getElementByIdWithName: false,
+	getElementsByTagNameIncludesComments: false,
+	normalizedHrefAttributes: false,
+	matchesSelector: false
+}
+
 var 
 	sax = require("sax"),
-	util = require('util');
+	util = require('util'),
+	sizzle = require('sizzle').Sizzle,
+	Stream = require('stream'),
+	EventEmitter = require('events').EventEmitter;
 
 function Node() {
+	EventEmitter.call(this);
 	this.childNodes = [];
 	this.firstChild = null;
 	this.lastChild = null;
@@ -12,9 +28,29 @@ function Node() {
 	this.previousSibling = null;
 	this.attributes = { }
 }
+util.inherits(Node, EventEmitter);
+
+Node.prototype.querySelector = function(query) {
+	var results = sizzle(query, this);
+	return results.length > 0 ? results[0] : null;
+}
+
+Node.prototype.querySelectorAll = function(query) {
+	return sizzle(query, this);
+}
 
 Node.prototype.getAttribute = function(attr) {
 	return this.attributes[attr];
+}
+
+Node.prototype.setAttribute = function(attr, val) {
+	this.attributes[attr] = val;
+	this.emit("attribute", attr);
+}
+
+Node.prototype.removeAttribute = function(attr) {
+	delete this.attributes[attr];
+	this.emit("attribute", attr);
 }
 
 
@@ -58,15 +94,21 @@ Node.prototype.getElementsByName = function(name) {
 }
 
 Node.prototype.contains = function(base, node) {
+	if (base === undefined) {
+		//FIXME: Needs work here....
+		return false;
+	}
 	for(var i = 0; i<base.childNodes.length; ++i) {
 		var child = base.childNodes[i];
-		if (child == node || contains(child, node))
+		if (child === node || child.contains(node))
 			return true;
 	}
 	return false;
 }
 
 Node.prototype.insertChild = function(idx, child) {
+	if (idx > this.childNodes.length)
+		throw new Error("Index out of bounds ("+idx+" >= " + this.childNodes.length+")!")
 	child.parentNode = this;
 	this.childNodes.splice(idx,0,child);
 				
@@ -104,36 +146,39 @@ Node.prototype.position = function() {
 	if (!parent)
 		return -1;
 	for(var i = 0; i<parent.childNodes.length; ++i)
-		if (parent.childNodes[i] == this) {
+		if (parent.childNodes[i] === this)
 			return i;
-		}
 	return -1;
 }
 
-Node.prototype.remove = function() {
-	this.empty();
-	var parent = this.parentNode;
-	if (parent) {
-		if (parent.firstChild == this)
-			parent.firstChild = this.nextSibling;
-		if (parent.lastChild == this)
-			parent.lastChild = this.previousSibling;
-		parent.childNodes.splice(this.position(), 1);
-	}
-
-	this.ownerDocument = this.previousSibling = this.nextSibling = this.parentNode = null;
+Node.prototype.removeChild = function(child) {
+	var parent = this;
+	if (parent.firstChild == child)
+		parent.firstChild = child.nextSibling;
+	if (parent.lastChild == child)
+		parent.lastChild = child.previousSibling;
+	parent.childNodes.splice(child.position(), 1);
+	child.ownerDocument = child.previousSibling = child.nextSibling = child.parentNode = null;
+	return child;
 }
 
-Node.prototype.replace = function(replacement) {
-	var n = this.position();
-	var p = this.parentNode;
-	var r = typeof replacement.length !== "undefined" && typeof replacement.splice === "function" ? replacement : [replacement];
-	this.remove();
-	if (p) 
-		for (var i=n, j=0; j<r.length; ++i, ++j) 
-			p.insertChild(i, r[j]);
+
+Node.prototype.insertBefore = function(newElement, referenceElement) {
+	if (referenceElement === null) 
+		this.appendChild(newElement);
+	else
+		p.insertChild(referenceElement.position(), newChild);
 }
 
+Node.prototype.replaceChild = function(newChild, oldChild) {
+	if (oldChild.parentNode !== this)
+		throw new Error("Replacing an element that doesn't belong to me!");
+	var n = oldChild.position();
+	var p = this;
+	this.removeChild(oldChild);
+	p.insertChild(n, newChild);
+	return oldChild;
+}
 
 Node.prototype.empty = function() {
 	this.childNodes = [];
@@ -158,7 +203,23 @@ Node.prototype.content = function(content) {
 
 
 
+Node.prototype.__defineSetter__("textContent", function(data) {
+	this.content(new Text(data));
+});
 
+Node.prototype.__defineGetter__("textContent", function() {
+	var out = "";
+	for(var i = 0; i < this.childNodes.length; ++i)
+			out += this.childNodes[i].textContent;
+	return out;
+});
+
+Node.prototype.__defineGetter__("nextElementSibling", function() {
+	var nextSibling = this.nextSibling;
+	while (nextSibling && nextSibling.nodeType !== 1)
+		nextSibling = nextSibling.nextSibling;
+	return nextSibling;
+});
 
 
 /**
@@ -189,8 +250,8 @@ Element.prototype.toString = function() {
 	for(var i = 0; i<this.childNodes.length; ++i)
 		text += this.childNodes[i].toString();
 	out += "<"+this.tagName+"";
-	for(var attr in this.attributes)
-		out += " "+attr+'="'+this.attributes[attr]+'"';
+	for(var attr in this.attributes) //replace(/\\/g, '\\\\').?
+		out += " "+attr+'="'+this.attributes[attr].replace(/"/g, '&quot;').replace(/'/g, '&apos;')+'"';
 	if (text)
 		out += ">" + text + "</" + this.tagName + ">";
 	else
@@ -211,9 +272,84 @@ Element.prototype.cloneNode = function(deep) {
 	return e;
 }
 
+function ClassList(element) {
+	Array.call(this);
+	var self = this;
+	this.element = element;
+	this.rebuild();
+	element.on("attribute", function(attr) {
+		if (attr === "class")
+			self.rebuild();
+	})
+}
+ClassList.prototype = [ ];
 
+ClassList.prototype.add = function(name) {
+	if (this.indexOf(name) === -1) {
+		this.push(name);
+		this.sync();
+	}
+}
 
+ClassList.prototype.remove = function(name) {
+	var index = this.indexOf(name);
+	if (index !== -1) {
+		this.splice(index, 1);
+		this.sync();
+	}
+}
 
+ClassList.prototype.toggle = function(name) {
+	var index = this.indexOf(name);
+	if (index !== -1) 
+		this.splice(index, 1);
+	else 
+		this.push(name);
+	this.sync();
+}
+ClassList.prototype.contains = function(name) {
+	return this.indexOf(name) !== -1;
+}
+
+ClassList.prototype.toString = function() {
+	return this.join(" ");
+}
+
+ClassList.prototype.rebuild = function() {
+	this.splice(0, this.length);
+	Array.prototype.push.apply(this, this.element.getAttribute("class").trim().split(/\s+/))
+}
+
+ClassList.prototype.sync =  function() {
+	this.element.attributes["class"] = this.toString();
+}
+
+function DataSet(element) {
+	var self = this;
+
+	element.on("attribute", function(name) {
+		if (name.match(/^data-/))
+			self[name.substr(5)] = element.getAttribute(name);
+	})
+
+	for (var name in element.attributes)
+		if (name.match(/^data-/))
+			self[name.substr(5)] = element.getAttribute(name);
+}
+
+Element.prototype.__defineGetter__("classList", function() {
+	if (this._classList)
+		return this._classList;
+	this._classList = new ClassList(this);
+	return this._classList;
+})
+
+Element.prototype.__defineGetter__("dataset", function() {
+	if (this._dataset)
+		return this._dataset;
+	this._dataset = new DataSet(this);
+	return this._dataset;
+})
 
 
 /**
@@ -231,14 +367,16 @@ Text.prototype.nodeType = 3;
 Text.prototype.nodeName = "#text"
 
 Text.prototype.toString = function() {
-	return this.nodeValue;
+	return this.nodeValue.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 Text.prototype.cloneNode = function() {
 	return new Text(this.nodeValue);
 }
 
-
+Text.prototype.__defineGetter__("textContent", function() {
+	return this.nodeValue;
+});
 
 
 
@@ -265,7 +403,9 @@ CDATASection.prototype.cloneNode = function() {
 }
 
 
-
+CDATASection.prototype.__defineGetter__("textContent", function() {
+	return this.nodeValue;
+});
 
 
 /**
@@ -290,6 +430,9 @@ ProcessingInstruction.prototype.cloneNode = function() {
 	return new ProcessingInstruction(this.nodeName, this.nodeValue);
 }
 
+ProcessingInstruction.prototype.__defineGetter__("textContent", function() {
+	return "";
+});
 
 
 /**
@@ -314,7 +457,9 @@ Comment.prototype.cloneNode = function() {
 	return new Comment(this.nodeValue);
 }
 
-
+Comment.prototype.__defineGetter__("textContent", function() {
+	return "";
+});
 
 
 /**
@@ -357,6 +502,9 @@ Document.prototype.cloneNode = function(deep) {
 	return doc;
 }
 
+Document.prototype.createTextNode = function(content) {
+	return new Text(content);
+}
 
 
 
@@ -382,7 +530,7 @@ DocumentType.prototype.cloneNode = function() {
 }
 
 function DOM(done) {
-	var parser = sax.parser(true);
+	var parser = sax.parser(false, { lowercasetags: true });
 	
 	var parent = function() {
 		return elementStack[elementStack.length - 1];
@@ -460,8 +608,29 @@ function DOM(done) {
 	}
 }
 
+Comment.prototype.__defineGetter__("textContent", function() {
+	return "";
+});
+
 
 dom.parser = function (done) { return new DOM(done) };
+dom.parse = function(data, done) {
+	var parser = new DOM(done);
+	if (typeof data === "string") {
+		parser.data(data);
+		parser.end();
+	}
+	else if (data instanceof Stream) {
+		data.on("data", function(chunk) {
+			parser.data(chunk.toString('utf8'));
+		}).on("end", function() {
+			parser.end();
+		})
+	}
+	else {
+		throw "Unknown data type!";
+	}
+}
 
 dom.Document = Document;
 dom.Element = Element;
@@ -470,6 +639,7 @@ dom.Text = Text;
 dom.CDATASection = CDATASection;
 dom.Comment = Comment;
 dom.DocumentType = DocumentType;
+dom.Node = Node;
 
 
 })(typeof exports === "undefined" ? dom = {} : exports);
