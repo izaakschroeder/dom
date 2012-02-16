@@ -107,8 +107,14 @@ Node.prototype.contains = function(base, node) {
 }
 
 Node.prototype.insertChild = function(idx, child) {
+	
+
 	if (idx > this.childNodes.length)
 		throw new Error("Index out of bounds ("+idx+" >= " + this.childNodes.length+")!")
+	
+	if (child.parentNode)
+		child.parentNode.detatchChild(child);
+
 	child.parentNode = this;
 	this.childNodes.splice(idx,0,child);
 				
@@ -151,15 +157,20 @@ Node.prototype.position = function() {
 	return -1;
 }
 
-Node.prototype.removeChild = function(child) {
+Node.prototype.detatchChild = function(child) {
 	var parent = this;
 	if (parent.firstChild == child)
 		parent.firstChild = child.nextSibling;
 	if (parent.lastChild == child)
 		parent.lastChild = child.previousSibling;
 	parent.childNodes.splice(child.position(), 1);
-	child.ownerDocument = child.previousSibling = child.nextSibling = child.parentNode = null;
+	child.previousSibling = child.nextSibling = child.parentNode = null;
 	return child;
+}
+
+Node.prototype.removeChild = function(child) {
+	child.ownerDocument = null;
+	return this.detatchChild(child);
 }
 
 
@@ -167,7 +178,7 @@ Node.prototype.insertBefore = function(newElement, referenceElement) {
 	if (referenceElement === null) 
 		this.appendChild(newElement);
 	else
-		p.insertChild(referenceElement.position(), newChild);
+		this.insertChild(referenceElement.position(), newElement);
 }
 
 Node.prototype.replaceChild = function(newChild, oldChild) {
@@ -477,12 +488,12 @@ function Document() {
 util.inherits(Document, Node);
 
 
-Document.prototype.getDocumentElement = function() {
+Document.prototype.__defineGetter__("documentElement", function() {
 	for(var i = 0; i<this.childNodes.length; ++i)
 		if (this.childNodes[i].nodeType == 1) 
 			return this.childNodes[i]
 	return null;				
-}
+});
 
 Document.prototype.toString = function() {
 	var out = "";
