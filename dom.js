@@ -1,21 +1,9 @@
 (function(dom) {
 
-global.sizzleCapabilities = {
-	contains: true,
-	compareDocumentPosition: false,
-	nodeListToArray: true,
-	querySelectorAll: false,
-	getElementsByClassName: false,
-	getElementByIdWithName: false,
-	getElementsByTagNameIncludesComments: false,
-	normalizedHrefAttributes: false,
-	matchesSelector: false
-}
-
 var 
 	sax = require("sax"),
 	util = require('util'),
-	sizzle = require('sizzle').Sizzle,
+	zest = require('./zest'),
 	Stream = require('stream'),
 	EventEmitter = require('events').EventEmitter;
 
@@ -31,12 +19,12 @@ function Node() {
 util.inherits(Node, EventEmitter);
 
 Node.prototype.querySelector = function(query) {
-	var results = sizzle(query, this);
+	var results = zest(query, this);
 	return results.length > 0 ? results[0] : null;
 }
 
 Node.prototype.querySelectorAll = function(query) {
-	return sizzle(query, this);
+	return zest(query, this);
 }
 
 Node.prototype.getAttribute = function(attr) {
@@ -44,7 +32,7 @@ Node.prototype.getAttribute = function(attr) {
 }
 
 Node.prototype.setAttribute = function(attr, val) {
-	this.attributes[attr] = val;
+	this.attributes[attr] = ''+val;
 	this.emit("attribute", attr);
 }
 
@@ -70,6 +58,7 @@ Node.prototype.getElementsByAttribute = function(attr, value) {
 	}
 	return out;
 }
+
 
 Node.prototype.getElementsByTagName = function(tagName) {
 	var out = [];
@@ -348,6 +337,10 @@ function DataSet(element) {
 			self[name.substr(5)] = element.getAttribute(name);
 }
 
+Element.prototype.__defineGetter__("className", function() {
+	return this.getAttribute("class");
+})
+
 Element.prototype.__defineGetter__("classList", function() {
 	if (this._classList)
 		return this._classList;
@@ -369,6 +362,8 @@ Element.prototype.__defineGetter__("dataset", function() {
  */
 function Text(text) {
 	Node.call(this);
+	if (typeof text !== "string")
+		throw new TypeError("Text given must be a string!");
 	this.nodeValue = text || "";
 }
 
