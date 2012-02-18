@@ -4,6 +4,11 @@
  * Copyright (c) 2011, Christopher Jeffrey. (MIT Licensed)
  */
 
+;(function() {
+
+var window = this
+  , document = this.document
+  , old = this.zest;
 
 /**
  * Helpers
@@ -420,4 +425,6 @@ zest.cache = function() {
 // to disable caching
 zest.cache();
 
-module.exports = zest
+window.zest = zest;
+
+}).call(this);

@@ -3,7 +3,7 @@
 var 
 	sax = require("sax"),
 	util = require('util'),
-	zest = require('./zest'),
+	zest = require('./zest').zest,
 	Stream = require('stream'),
 	EventEmitter = require('events').EventEmitter;
 
