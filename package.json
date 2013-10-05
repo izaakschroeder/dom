@@ -1,15 +1,17 @@
 {
-	"name": "DOM",
+	"name": "com.izaakschroeder.dom",
 	"description": "A simple implementation of the DOM.",
-	"version": "0.0.1",
+	"version": "0.0.6",
 	"author": "Izaak Schroeder",
-	"engine": "node >= 0.6.0",
+	"engine": "node >= 0.9.0",
 	"main": "dom.js",
 	"dependencies": {
-		"sax": "0.3.5"
+		"com.izaakschroeder.trait": ">=0.0.1",
+		"com.izaakschroeder.xml": ">=0.0.1",
+		"amdefine": ">=0.0.2"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/izaakschroeder/node-dom.git"
+		"url": "https://github.com/izaakschroeder/dom.git"
 	}
 }

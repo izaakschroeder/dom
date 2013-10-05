@@ -1,3 +1,0 @@
-= DOM =
-
-A simple and lightweight implementation of the DOM for node.js.

@@ -76,19 +76,25 @@ var nth = function(param, test) {
  * Simple Selectors
  */
 
+function checkNamespace(el, namespace) {
+	return (!namespace || namespace === '*' || el.namespaceURI === namespace);
+}
+
 var selectors = {
-	'*': function() {
-		return true;
-	},
-	'type': function(type) {
-		type = type.toLowerCase();
+	'*': function(namespace) {
 		return function(el) {
-			return el.nodeName.toLowerCase() === type;
+			return checkNamespace(el, namespace);
 		};
 	},
-	'attr': function(key, op, val) {
+	'type': function(type, namespace) {
+		return function(el) {
+			return el.nodeName.toLowerCase() === type && checkNamespace(el, namespace);
+		};
+	},
+	'attr': function(key, op, val, namespace) {
 		if (!operators[op])
 			throw new Error("Unsupported operator: "+op);
+		
 		op = operators[op];
 
 		return function(el) {
@@ -107,7 +113,8 @@ var selectors = {
 				attr = el.getAttribute(key);
 			break;
 			}
-			return attr != null && op(attr + '', val);
+			
+			return attr != null && op(attr + '', val) && checkNamespace(el, namespace);
 		};
 	},
 	':first-child': function(el) {
@@ -286,6 +293,7 @@ generatesElements = function(sel) {
 
 parse = function(sel) {
 	var cap, param;
+	/*FIXME: Add namespace check here*/
 	switch (sel[0]) {
 	case '.': 
 		return selectors.attr('class', '~=', sel.substring(1));
@@ -297,12 +305,13 @@ parse = function(sel) {
 		return selectors.attr(cap[1], cap[2] || '-', unquote(cap[5]));
 	case ':': 
 		cap = /^(:[\w-]+)\(([^)]+)\)/.exec(sel);
-		if (cap) sel = cap[1], param = unquote(cap[2]);
+		if (cap) 
+			sel = cap[1], param = unquote(cap[2]);
 		return param ? selectors[sel](param) : selectors[sel];
 	case '*': 
 		return selectors['*'];
 	default: 
-		return selectors.type(sel);
+		return selectors.type(sel.toLowerCase());
 	}
 };
 
@@ -343,18 +352,18 @@ var compile = function(sel) {
 compile.make = function(func) {
 	return function(el) {
 		var i = 0, next;
-		while (next = func[i++]) {
-			if (!(el = next(el))) return;
-		}
+		while (next = func[i++]) 
+			if (!(el = next(el))) 
+				return;
 		return true;
 	};
 };
 
-function dfs(node) {
+function dfs(node, filter) {
 	var child = [ node ], parent = [ ];
 	while (child.length > 0) {
 		var current = child.pop();
-		if (current.nodeType === 1)
+		if (current.nodeType === 1 && filter(current))
 			parent.unshift(current);
 		if (current.childNodes.length > 0)
 			Array.prototype.push.apply(child, current.childNodes)
@@ -363,10 +372,9 @@ function dfs(node) {
 }
 
 var select = function(selector, context) {
-	var original = dfs(context), results = [ ];
-	var group = selector.split(/,\s*(?![^\[]*["'])/), sel = undefined, i = 0, scope, el, k;
+	var results = [ ], group = selector.split(/,\s*(?![^\[]*["'])/);
 	group.forEach(function(sel) {
-		original.slice().filter(compile(sel)).forEach(function(item) {
+		dfs(context, compile(sel)).forEach(function(item) {
 			if (results.indexOf(item) === -1)
 				results.push(item);
 		});
@@ -386,7 +394,7 @@ var zest = select = function (sel, context) {
 		// if (sel[0] === '.' && /^\.\w+$/.test(sel))
 			//return context.getElementsByClassName(sel.substring(1));
 
-		if (/^\w+$/.test(sel))
+		if (/^\w+$/.test(sel)) 
 			return context.getElementsByTagName(sel);
 
 	}
