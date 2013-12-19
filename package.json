@@ -1,9 +1,9 @@
 {
 	"name": "com.izaakschroeder.dom",
 	"description": "A simple implementation of the DOM.",
-	"version": "0.0.6",
+	"version": "0.0.7",
 	"author": "Izaak Schroeder",
-	"engine": "node >= 0.9.0",
+	"engine": "node >= 0.10.0",
 	"main": "dom.js",
 	"dependencies": {
 		"com.izaakschroeder.trait": ">=0.0.1",

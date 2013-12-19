@@ -113,8 +113,7 @@ var selectors = {
 				attr = el.getAttribute(key);
 			break;
 			}
-			
-			return attr != null && op(attr + '', val) && checkNamespace(el, namespace);
+			return attr !== null && op(attr + '', val) && checkNamespace(el, namespace);
 		};
 	},
 	':first-child': function(el) {
@@ -208,14 +207,14 @@ var selectors = {
  */
 
 var operators = {
-	'-': function() {
-		return true;
+	'-': function(attr) {
+		return (typeof attr === 'string') && (attr.length > 0) ;
 	},
 	'=': function(attr, val) {
 		return attr === val;
 	},
 		'*=': function(attr, val) {
-	return attr.indexOf(val) !== -1;
+		return attr.indexOf(val) !== -1;
 	},
 	'~=': function(attr, val) {
 		var i = attr.indexOf(val), f, l;
